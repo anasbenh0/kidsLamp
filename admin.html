@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MicroKids™ | لوحة تحكم الطلبات (Admin Orders Panel)</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      font-family: 'Cairo', 'Plus Jakarta Sans', sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .badge-pending { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .badge-confirmed { background-color: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .badge-shipped { background-color: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+    .badge-delivered { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .badge-cancelled { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+  </style>
+</head>
+<body class="min-h-screen pb-16 bg-slate-100">
+
+  <!-- AUTH / PASSWORD LOCK SCREEN (Password: 123456789) -->
+  <div id="authScreen" class="fixed inset-0 bg-slate-950 z-50 flex items-center justify-center p-4">
+    <!-- Ambient Glow Effect -->
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-950 to-slate-950 pointer-events-none"></div>
+
+    <div class="relative bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl text-center space-y-5">
+      <!-- Icon with glow -->
+      <div class="relative mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white text-2xl shadow-xl shadow-blue-500/25">
+        <i class="fa-solid fa-lock"></i>
+      </div>
+
+      <div>
+        <h2 class="text-xl font-black text-white tracking-tight">MicroKids™ Admin</h2>
+        <p class="text-xs text-slate-400 mt-1">منطقة محمية • يرجى إدخال كلمة المرور</p>
+      </div>
+
+      <!-- Login Form -->
+      <form onsubmit="handleLogin(event)" class="space-y-4 text-right">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1.5">كلمة المرور (Password)</label>
+          <div class="relative">
+            <input 
+              type="password" 
+              id="adminPassInput" 
+              placeholder="•••••••••" 
+              autocomplete="current-password"
+              class="w-full bg-slate-800/90 border border-slate-700 focus:border-blue-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition text-left" 
+              dir="ltr"
+              required 
+            />
+            <button 
+              type="button" 
+              onclick="togglePasswordVisibility()" 
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 text-sm transition"
+              tabindex="-1"
+            >
+              <i class="fa-solid fa-eye" id="eyeIcon"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Error Alert -->
+        <div id="loginError" class="hidden bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold p-2.5 rounded-xl text-center flex items-center justify-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>كلمة المرور غير صحيحة، حاول مجدداً!</span>
+        </div>
+
+        <!-- Remember Me Checkbox -->
+        <div class="flex items-center justify-between text-xs text-slate-400 pt-1">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="rememberMe" checked class="rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-500" />
+            <span>تذكرني على هذا الجهاز</span>
+          </label>
+        </div>
+
+        <!-- Submit Button -->
+        <button 
+          type="submit" 
+          id="btnLoginSubmit"
+          class="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-600/30 text-sm transition flex items-center justify-center gap-2"
+        >
+          <i class="fa-solid fa-right-to-bracket"></i>
+          <span>دخول للوحة التحكم</span>
+        </button>
+      </form>
+
+      <div class="text-[11px] text-slate-500 pt-2 border-t border-slate-800/80">
+        🔐 نظام حماية الطلبات المباشر
+      </div>
+    </div>
+  </div>
+
+  <!-- PROTECTED ADMIN APP WRAPPER (Hidden until authenticated) -->
+  <div id="adminApp" class="hidden">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="bg-slate-900 text-white sticky top-0 z-40 border-b border-slate-800 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white text-lg shadow-lg shadow-blue-500/30">
+          <i class="fa-solid fa-microscope"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-black tracking-tight">MicroKids™ Admin</h1>
+            <span class="text-[11px] bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full font-bold">COD Manager</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5" id="syncStatus">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>جاري الاتصال بـ Firebase...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Nav Buttons -->
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <a 
+          href="/" 
+          target="_blank"
+          class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl border border-slate-700 transition flex items-center gap-1.5"
+          title="عرض صفحة المتجر"
+        >
+          <i class="fa-solid fa-store text-blue-400"></i>
+          <span class="hidden sm:inline">معاينة المتجر</span>
+        </a>
+
+        <button 
+          onclick="openManualOrderModal()"
+          class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow-md shadow-blue-600/30 flex items-center gap-1.5"
+        >
+          <i class="fa-solid fa-plus"></i>
+          <span>طلب يدوي</span>
+        </button>
+
+        <button 
+          onclick="exportToCSV()"
+          class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow-md shadow-emerald-600/30 flex items-center gap-1.5"
+          title="تحميل جميع الطلبات في ملف Excel / CSV"
+        >
+          <i class="fa-solid fa-file-excel"></i>
+          <span class="hidden sm:inline">تصدير CSV</span>
+        </button>
+
+        <button 
+          onclick="reloadOrders()"
+          class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs px-2.5 py-2 rounded-xl border border-slate-700 transition"
+          title="تحديث البيانات"
+        >
+          <i class="fa-solid fa-arrows-rotate" id="refreshIcon"></i>
+        </button>
+
+        <!-- Logout / Lock Button -->
+        <button 
+          onclick="logoutAdmin()"
+          class="bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/40 text-rose-300 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 active:scale-95"
+          title="قفل لوحة التحكم والخروج"
+        >
+          <i class="fa-solid fa-lock text-rose-400"></i>
+          <span class="hidden sm:inline">قفل</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
+
+    <!-- KPI STATS CARDS -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      
+      <!-- Card 1: Total Orders -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <div class="text-xs font-bold text-slate-400">إجمالي الطلبات</div>
+          <div class="text-2xl font-black text-slate-900 mt-1" id="kpiTotalOrders">0</div>
+          <div class="text-[11px] text-slate-500 font-semibold mt-0.5">كل المعاملات</div>
+        </div>
+        <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-cart-shopping"></i>
+        </div>
+      </div>
+
+      <!-- Card 2: Revenue -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <div class="text-xs font-bold text-slate-400">المبيعات المتوقعة</div>
+          <div class="text-2xl font-black text-emerald-600 mt-1" id="kpiTotalRevenue">0 ر.س</div>
+          <div class="text-[11px] text-emerald-700/80 font-semibold mt-0.5">قيمة السلات</div>
+        </div>
+        <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-coins"></i>
+        </div>
+      </div>
+
+      <!-- Card 3: Pending -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <div class="text-xs font-bold text-amber-600">قيد التأكيد (Pending)</div>
+          <div class="text-2xl font-black text-amber-600 mt-1" id="kpiPending">0</div>
+          <div class="text-[11px] text-amber-700 font-semibold mt-0.5">تحتاج اتصال فوراً</div>
+        </div>
+        <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+      </div>
+
+      <!-- Card 4: Confirmed / Shipped -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <div class="text-xs font-bold text-indigo-600">مؤكدة / قيد الشحن</div>
+          <div class="text-2xl font-black text-indigo-600 mt-1" id="kpiShipped">0</div>
+          <div class="text-[11px] text-indigo-700 font-semibold mt-0.5">لدى شركة التوصيل</div>
+        </div>
+        <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-truck-fast"></i>
+        </div>
+      </div>
+
+      <!-- Card 5: Delivered -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm col-span-2 lg:col-span-1 flex items-center justify-between">
+        <div>
+          <div class="text-xs font-bold text-green-600">تم التسليم والتحصيل</div>
+          <div class="text-2xl font-black text-green-600 mt-1" id="kpiDelivered">0</div>
+          <div class="text-[11px] text-green-700 font-semibold mt-0.5">أرباح محققة</div>
+        </div>
+        <div class="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FILTER & SEARCH BAR -->
+    <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        
+        <!-- Live Search -->
+        <div class="relative flex-1">
+          <i class="fa-solid fa-magnifying-glass absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input 
+            type="text" 
+            id="searchInput" 
+            oninput="applyFilters()" 
+            placeholder="بحث برقم الطلب، اسم العميل، الهاتف، أو المدينة..." 
+            class="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+          />
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          
+          <!-- Status Filter -->
+          <div class="flex items-center gap-1.5 w-full sm:w-auto">
+            <span class="text-xs font-bold text-slate-500 whitespace-nowrap">الحالة:</span>
+            <select 
+              id="statusFilter" 
+              onchange="applyFilters()" 
+              class="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="ALL">جميع الحالات (الكل)</option>
+              <option value="Pending">⏳ قيد الانتظار (Pending)</option>
+              <option value="Confirmed">📞 تم التأكيد (Confirmed)</option>
+              <option value="Shipped">🚚 قيد الشحن (Shipped)</option>
+              <option value="Delivered">✅ تم التسليم (Delivered)</option>
+              <option value="Cancelled">❌ ملغي (Cancelled)</option>
+            </select>
+          </div>
+
+          <!-- Color Filter -->
+          <div class="flex items-center gap-1.5 w-full sm:w-auto">
+            <span class="text-xs font-bold text-slate-500 whitespace-nowrap">اللون:</span>
+            <select 
+              id="colorFilter" 
+              onchange="applyFilters()" 
+              class="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="ALL">جميع الألوان</option>
+              <option value="yellow">🟡 أصفر برتقالي</option>
+              <option value="orange">🟠 برتقالي ناصع</option>
+              <option value="blue">🔵 أزرق سماوي</option>
+              <option value="pink">🌸 وردي لطيف</option>
+            </select>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Quick Status Filter Pills -->
+      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+        <button onclick="setStatusPill('ALL')" class="status-pill px-3 py-1.5 rounded-lg font-bold bg-slate-900 text-white whitespace-nowrap" data-status="ALL">
+          الكل (<span id="countAll">0</span>)
+        </button>
+        <button onclick="setStatusPill('Pending')" class="status-pill px-3 py-1.5 rounded-lg font-bold bg-slate-100 hover:bg-slate-200 text-amber-700 whitespace-nowrap" data-status="Pending">
+          ⏳ بانتظار التأكيد (<span id="countPending">0</span>)
+        </button>
+        <button onclick="setStatusPill('Confirmed')" class="status-pill px-3 py-1.5 rounded-lg font-bold bg-slate-100 hover:bg-slate-200 text-blue-700 whitespace-nowrap" data-status="Confirmed">
+          📞 تم التأكيد (<span id="countConfirmed">0</span>)
+        </button>
+        <button onclick="setStatusPill('Shipped')" class="status-pill px-3 py-1.5 rounded-lg font-bold bg-slate-100 hover:bg-slate-200 text-purple-700 whitespace-nowrap" data-status="Shipped">
+          🚚 تم الشحن (<span id="countShipped">0</span>)
+        </button>
+        <button onclick="setStatusPill('Delivered')" class="status-pill px-3 py-1.5 rounded-lg font-bold bg-slate-100 hover:bg-slate-200 text-emerald-700 whitespace-nowrap" data-status="Delivered">
+          ✅ مسلّم (<span id="countDelivered">0</span>)
+        </button>
+        <button onclick="setStatusPill('Cancelled')" class="status-pill px-3 py-1.5 rounded-lg font-bold bg-slate-100 hover:bg-slate-200 text-red-700 whitespace-nowrap" data-status="Cancelled">
+          ❌ ملغي (<span id="countCancelled">0</span>)
+        </button>
+      </div>
+    </div>
+
+    <!-- ORDERS LIST / TABLE SECTION -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      
+      <!-- Table Header Bar -->
+      <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-list-check text-blue-600"></i>
+          <h2 class="font-bold text-slate-800 text-sm sm:text-base">جدول طلبات الزبائن (Real-time Live)</h2>
+          <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs font-bold" id="ordersShownCount">0 طلب</span>
+        </div>
+        <div class="text-xs text-slate-400">
+          تحديث فوري عند أي طلب جديد
+        </div>
+      </div>
+
+      <!-- DESKTOP TABLE VIEW (hidden on mobile) -->
+      <div class="hidden lg:block overflow-x-auto">
+        <table class="w-full text-right text-sm">
+          <thead class="bg-slate-50 text-slate-500 text-xs font-bold border-b border-slate-200">
+            <tr>
+              <th class="px-4 py-3">رقم الطلب والتاريخ</th>
+              <th class="px-4 py-3">العميل والهاتف</th>
+              <th class="px-4 py-3">المدينة والعنوان</th>
+              <th class="px-4 py-3">اللون والكمية</th>
+              <th class="px-4 py-3">المجموع الكلي</th>
+              <th class="px-4 py-3">حالة الطلب</th>
+              <th class="px-4 py-3 text-center">إجراءات سريعة</th>
+            </tr>
+          </thead>
+          <tbody id="ordersTableBody" class="divide-y divide-slate-100 text-slate-700">
+            <!-- Dynamic rows will render here -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- MOBILE / TABLET CARDS VIEW (visible on small/medium screens) -->
+      <div id="ordersCardsContainer" class="lg:hidden divide-y divide-slate-100 p-3 space-y-3">
+        <!-- Dynamic mobile cards will render here -->
+      </div>
+
+      <!-- EMPTY STATE -->
+      <div id="emptyState" class="hidden py-16 px-4 text-center">
+        <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-2xl mb-3">
+          <i class="fa-solid fa-box-open"></i>
+        </div>
+        <h3 class="text-base font-bold text-slate-800">لا توجد طلبات تطابق بحثك حالياً</h3>
+        <p class="text-xs text-slate-500 mt-1">عندما يقوم أي زائر بتعبئة نموذج الطلب في المتجر، سيظهر هنا فوراً في ثوانٍ معدودة.</p>
+        <button onclick="resetFilters()" class="mt-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-xl text-xs transition">
+          إعادة ضبط الفلاتر
+        </button>
+      </div>
+
+      <!-- LOADING STATE -->
+      <div id="loadingState" class="py-16 px-4 text-center">
+        <div class="inline-block animate-spin text-blue-600 text-3xl mb-3">
+          <i class="fa-solid fa-circle-notch"></i>
+        </div>
+        <div class="text-sm font-bold text-slate-700">جاري تحميل الطلبات من Firebase Firestore...</div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- MANUAL ORDER MODAL -->
+  <div id="manualOrderModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between border-b pb-3 border-slate-100">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+            <i class="fa-solid fa-plus"></i>
+          </div>
+          <h3 class="text-base font-black text-slate-900">تسجيل طلب يدوي جديد</h3>
+        </div>
+        <button onclick="closeManualOrderModal()" class="text-slate-400 hover:text-slate-600 p-1 text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="manualOrderForm" onsubmit="submitManualOrder(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">اسم العميل *</label>
+          <input type="text" id="mCustName" required placeholder="مثال: محمد العمري" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white" />
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">رقم الهاتف *</label>
+          <input type="tel" id="mCustPhone" required placeholder="05XXXXXXXX أو +212..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-left focus:ring-2 focus:ring-blue-500 focus:bg-white" dir="ltr" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">الدولة</label>
+            <select id="mCustCountry" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+              <option value="السعودية">السعودية</option>
+              <option value="المغرب">المغرب</option>
+              <option value="الإمارات">الإمارات</option>
+              <option value="الكويت">الكويت</option>
+              <option value="قطر">قطر</option>
+              <option value="أخرى">دولة أخرى</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">المدينة *</label>
+            <input type="text" id="mCustCity" required placeholder="الرياض / الدار البيضاء..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">العنوان بالتفصيل</label>
+          <input type="text" id="mCustAddress" placeholder="الحي، رقم الشارع، العمارة..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">اللون المختار</label>
+            <select id="mColor" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+              <option value="yellow">🟡 أصفر برتقالي</option>
+              <option value="orange">🟠 برتقالي ناصع</option>
+              <option value="blue">🔵 أزرق سماوي</option>
+              <option value="pink">🌸 وردي لطيف</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">الكمية والعرض</label>
+            <select id="mQuantity" onchange="updateManualPrice()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
+              <option value="1">1 ميكروسكوب (119 ر.س)</option>
+              <option value="2" selected>2 ميكروسكوبات (199 ر.س - شحن مجاني)</option>
+              <option value="3">3 ميكروسكوبات (269 ر.س - شحن مجاني)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">المبلغ الإجمالي (شامل الشحن)</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="mPrice" value="199" required class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-600 focus:ring-2 focus:ring-blue-500 focus:bg-white" />
+            <span class="text-xs font-bold text-slate-500">ر.س</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">حالة الطلب</label>
+          <select id="mStatus" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold">
+            <option value="Pending">⏳ قيد الانتظار (Pending)</option>
+            <option value="Confirmed" selected>📞 مؤكد هاتفياً (Confirmed)</option>
+            <option value="Shipped">🚚 قيد الشحن (Shipped)</option>
+            <option value="Delivered">✅ تم التسليم (Delivered)</option>
+          </select>
+        </div>
+
+        <div class="pt-3 flex gap-2">
+          <button type="button" onclick="closeManualOrderModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition">
+            إلغاء
+          </button>
+          <button type="submit" id="btnSubmitManual" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition shadow-md shadow-blue-500/20">
+            حفظ الطلب
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed bottom-5 left-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 transform translate-y-24 transition-all duration-300">
+    <div id="toastIcon" class="text-emerald-400 text-lg"><i class="fa-solid fa-circle-check"></i></div>
+    <div id="toastMsg" class="text-xs font-bold">تم حفظ التغييرات بنجاح!</div>
+  </div>
+
+  </div> <!-- /#adminApp -->
+
+  <!-- FIREBASE & LOGIC SCRIPT -->
+  <script>
+    // 1. Firebase Configuration (Directly in code as requested)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDOPUQlnB3KY1mFUm5Q7CG3FexgB-L8UN0",
+      authDomain: "kidslamp-98bce.firebaseapp.com",
+      projectId: "kidslamp-98bce",
+      storageBucket: "kidslamp-98bce.firebasestorage.app",
+      messagingSenderId: "725202500233",
+      appId: "1:725202500233:web:1d1f4640596bf4141e2458"
+    };
+
+    let db = null;
+    let rawOrders = [];
+    let isFirestoreActive = false;
+
+    // Initialize Firebase Compat
+    try {
+      if (typeof firebase !== 'undefined') {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        isFirestoreActive = true;
+        console.log("Admin: Firebase initialized successfully!");
+      }
+    } catch (err) {
+      console.warn("Firebase Init Notice:", err);
+    }
+
+    // Color labels and badges
+    const COLOR_INFO = {
+      yellow: { name: "أصفر برتقالي", dot: "bg-amber-400 border-amber-600", badge: "bg-amber-50 text-amber-700 border-amber-200" },
+      orange: { name: "برتقالي ناصع", dot: "bg-orange-500 border-orange-700", badge: "bg-orange-50 text-orange-700 border-orange-200" },
+      blue:   { name: "أزرق سماوي", dot: "bg-blue-500 border-blue-700", badge: "bg-blue-50 text-blue-700 border-blue-200" },
+      pink:   { name: "وردي لطيف", dot: "bg-pink-400 border-pink-600", badge: "bg-pink-50 text-pink-700 border-pink-200" }
+    };
+
+    // Format Relative Time
+    function formatTimeAgo(timestamp) {
+      if (!timestamp) return "الآن";
+      const diff = Math.floor((Date.now() - timestamp) / 1000);
+      if (diff < 60) return "منذ لحظات";
+      if (diff < 3600) return `منذ ${Math.floor(diff / 60)} دقيقة`;
+      if (diff < 86400) return `منذ ${Math.floor(diff / 3600)} ساعة`;
+      return `منذ ${Math.floor(diff / 86400)} يوم`;
+    }
+
+    // Toast Alert
+    function showToast(msg, isError = false) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+      
+      toastMsg.innerText = msg;
+      toastIcon.innerHTML = isError ? '<i class="fa-solid fa-triangle-exclamation text-rose-400"></i>' : '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+      
+      toast.classList.remove('translate-y-24');
+      toast.classList.add('translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0');
+        toast.classList.add('translate-y-24');
+      }, 3500);
+    }
+
+    // Start Listening to Orders
+    function initOrdersListener() {
+      const syncStatusEl = document.getElementById('syncStatus');
+
+      if (db) {
+        syncStatusEl.innerHTML = `
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-emerald-400">Firebase Firestore متصل (Live Sync)</span>
+        `;
+
+        // Realtime Firestore Listener
+        db.collection("orders")
+          .onSnapshot(snapshot => {
+            document.getElementById('loadingState').classList.add('hidden');
+            const firestoreOrders = [];
+            snapshot.forEach(doc => {
+              firestoreOrders.push({
+                _id: doc.id,
+                ...doc.data()
+              });
+            });
+
+            // Also merge with localStorage if any local offline orders exist
+            const localOrders = JSON.parse(localStorage.getItem('microkids_orders') || '[]');
+            
+            // Map by ref or ID to avoid duplicates
+            const map = new Map();
+            firestoreOrders.forEach(o => map.set(o.orderRef || o._id, o));
+            localOrders.forEach(o => {
+              const key = o.orderRef || o._id;
+              if (!map.has(key)) {
+                map.set(key, { ...o, _isLocal: true });
+              }
+            });
+
+            rawOrders = Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            applyFilters();
+          }, error => {
+            console.warn("Firestore onSnapshot error:", error);
+            syncStatusEl.innerHTML = `
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span class="text-amber-400">وضع التخزين المحلي (LocalStorage Active)</span>
+            `;
+            loadFromLocalStorage();
+          });
+      } else {
+        loadFromLocalStorage();
+      }
+    }
+
+    function loadFromLocalStorage() {
+      document.getElementById('loadingState').classList.add('hidden');
+      rawOrders = JSON.parse(localStorage.getItem('microkids_orders') || '[]');
+      rawOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      applyFilters();
+    }
+
+    // Apply Filters & Search
+    let activeStatusPill = "ALL";
+
+    function setStatusPill(status) {
+      activeStatusPill = status;
+      document.getElementById('statusFilter').value = status;
+      document.querySelectorAll('.status-pill').forEach(pill => {
+        if (pill.dataset.status === status) {
+          pill.className = "status-pill px-3 py-1.5 rounded-lg font-bold bg-slate-900 text-white whitespace-nowrap";
+        } else {
+          pill.className = "status-pill px-3 py-1.5 rounded-lg font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 whitespace-nowrap";
+        }
+      });
+      applyFilters();
+    }
+
+    function resetFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('statusFilter').value = 'ALL';
+      document.getElementById('colorFilter').value = 'ALL';
+      setStatusPill('ALL');
+    }
+
+    function applyFilters() {
+      const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+      const statusF = document.getElementById('statusFilter').value;
+      const colorF = document.getElementById('colorFilter').value;
+
+      // Update KPIs based on raw orders
+      updateKPIs(rawOrders);
+
+      // Filtered set
+      const filtered = rawOrders.filter(order => {
+        // Search query
+        if (q) {
+          const name = (order.customerName || '').toLowerCase();
+          const phone = (order.phone || '').toLowerCase();
+          const city = (order.city || '').toLowerCase();
+          const ref = (order.orderRef || '').toLowerCase();
+          if (!name.includes(q) && !phone.includes(q) && !city.includes(q) && !ref.includes(q)) {
+            return false;
+          }
+        }
+        // Status filter
+        if (statusF !== 'ALL' && (order.status || 'Pending') !== statusF) {
+          return false;
+        }
+        // Color filter
+        if (colorF !== 'ALL' && order.colorKey !== colorF) {
+          return false;
+        }
+        return true;
+      });
+
+      renderOrders(filtered);
+    }
+
+    // Update KPIs & Pills Counts
+    function updateKPIs(orders) {
+      let totalRevenue = 0;
+      let countPending = 0;
+      let countConfirmed = 0;
+      let countShipped = 0;
+      let countDelivered = 0;
+      let countCancelled = 0;
+
+      orders.forEach(o => {
+        const price = Number(o.price) || 0;
+        const status = o.status || 'Pending';
+
+        if (status !== 'Cancelled') {
+          totalRevenue += price;
+        }
+
+        if (status === 'Pending') countPending++;
+        else if (status === 'Confirmed') countConfirmed++;
+        else if (status === 'Shipped') countShipped++;
+        else if (status === 'Delivered') countDelivered++;
+        else if (status === 'Cancelled') countCancelled++;
+      });
+
+      document.getElementById('kpiTotalOrders').innerText = orders.length;
+      document.getElementById('kpiTotalRevenue').innerText = `${totalRevenue} ر.س`;
+      document.getElementById('kpiPending').innerText = countPending;
+      document.getElementById('kpiShipped').innerText = (countConfirmed + countShipped);
+      document.getElementById('kpiDelivered').innerText = countDelivered;
+
+      // Update status pill badges
+      document.getElementById('countAll').innerText = orders.length;
+      document.getElementById('countPending').innerText = countPending;
+      document.getElementById('countConfirmed').innerText = countConfirmed;
+      document.getElementById('countShipped').innerText = countShipped;
+      document.getElementById('countDelivered').innerText = countDelivered;
+      document.getElementById('countCancelled').innerText = countCancelled;
+    }
+
+    // Get Status Badge Classes
+    function getStatusBadge(status) {
+      switch (status) {
+        case 'Confirmed': return 'badge-confirmed';
+        case 'Shipped': return 'badge-shipped';
+        case 'Delivered': return 'badge-delivered';
+        case 'Cancelled': return 'badge-cancelled';
+        default: return 'badge-pending';
+      }
+    }
+
+    function getStatusArabic(status) {
+      switch (status) {
+        case 'Confirmed': return '📞 تم التأكيد';
+        case 'Shipped': return '🚚 قيد الشحن';
+        case 'Delivered': return '✅ تم التسليم';
+        case 'Cancelled': return '❌ تم الإلغاء';
+        default: return '⏳ قيد الانتظار';
+      }
+    }
+
+    // Render Orders in Table & Mobile Cards
+    function renderOrders(orders) {
+      const tableBody = document.getElementById('ordersTableBody');
+      const cardsContainer = document.getElementById('ordersCardsContainer');
+      const emptyState = document.getElementById('emptyState');
+      document.getElementById('ordersShownCount').innerText = `${orders.length} طلب`;
+
+      if (orders.length === 0) {
+        tableBody.innerHTML = '';
+        cardsContainer.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      // Desktop Rows
+      let tableHtml = '';
+      // Mobile Cards
+      let cardsHtml = '';
+
+      orders.forEach((o, idx) => {
+        const orderId = o._id || o.orderRef;
+        const color = COLOR_INFO[o.colorKey] || { name: o.colorName || "أصفر", dot: "bg-amber-400 border-amber-600", badge: "bg-slate-100 text-slate-700" };
+        const status = o.status || 'Pending';
+        const statusBadgeClass = getStatusBadge(status);
+        const timeAgo = formatTimeAgo(o.timestamp);
+        const fullDate = o.createdAt ? new Date(o.createdAt).toLocaleDateString('ar-MA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : timeAgo;
+
+        // Clean phone for tel: and whatsapp:
+        const cleanPhone = (o.phone || '').replace(/[^0-9+]/g, '');
+
+        // WhatsApp Confirmation Message
+        const waMsg = encodeURIComponent(
+          `السلام عليكم أخي/أختي ${o.customerName || ''} 👋\nمعك خدمة العملاء بخصوص طلبك لمجهر الأطفال MicroKids 🔬\n\n- رقم الطلب: ${o.orderRef || ''}\n- اللون المختار: ${color.name}\n- الكمية: ${o.quantity || 1} حبة\n- المبلغ الإجمالي: ${o.price || 0} ${o.currency || 'ر.س'} (الدفع عند الاستلام 🚚)\n- العنوان: ${o.city || ''} ${o.address ? '- ' + o.address : ''}\n\nهل تؤكد لنا إرسال الطلبية لعنوانكم اليوم؟`
+        );
+
+        // --- 1. TABLE ROW (Desktop) ---
+        tableHtml += `
+          <tr class="hover:bg-slate-50/80 transition-colors">
+            
+            <!-- Ref & Date -->
+            <td class="px-4 py-3.5">
+              <div class="font-mono font-black text-blue-600 text-xs">${o.orderRef || '#CMD-N/A'}</div>
+              <div class="text-[11px] text-slate-400 mt-0.5" title="${o.createdAt || ''}">${timeAgo}</div>
+            </td>
+
+            <!-- Customer -->
+            <td class="px-4 py-3.5">
+              <div class="font-bold text-slate-900">${o.customerName || 'بدون اسم'}</div>
+              <a href="tel:${cleanPhone}" class="inline-flex items-center gap-1 text-slate-500 hover:text-blue-600 font-mono text-xs mt-0.5" dir="ltr">
+                <i class="fa-solid fa-phone text-[10px]"></i> ${o.phone || '-'}
+              </a>
+            </td>
+
+            <!-- Location -->
+            <td class="px-4 py-3.5">
+              <div class="font-semibold text-slate-800 text-xs">${o.city || '-'} <span class="text-slate-400 text-[10px]">(${o.country || 'السعودية'})</span></div>
+              <div class="text-[11px] text-slate-400 truncate max-w-[180px]" title="${o.address || ''}">${o.address || 'العنوان غير محدد'}</div>
+            </td>
+
+            <!-- Product & Color -->
+            <td class="px-4 py-3.5">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full ${color.dot} inline-block flex-shrink-0"></span>
+                <span class="font-bold text-xs text-slate-800">${color.name}</span>
+              </div>
+              <div class="text-[11px] text-slate-500 mt-0.5">${o.quantity || 1}x قطعة (${o.packageTitle || 'عرض ترويجي'})</div>
+            </td>
+
+            <!-- Price -->
+            <td class="px-4 py-3.5">
+              <div class="font-black text-slate-900 text-sm">${o.price || 0} <span class="text-xs font-normal text-slate-500">${o.symbol || 'ر.س'}</span></div>
+              <div class="text-[10px] text-emerald-600 font-bold">الدفع عند الاستلام</div>
+            </td>
+
+            <!-- Status Dropdown -->
+            <td class="px-4 py-3.5">
+              <select 
+                onchange="updateOrderStatus('${orderId}', this.value)" 
+                class="text-xs font-bold px-2.5 py-1.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-400 transition cursor-pointer ${statusBadgeClass}"
+              >
+                <option value="Pending" ${status === 'Pending' ? 'selected' : ''}>⏳ قيد الانتظار</option>
+                <option value="Confirmed" ${status === 'Confirmed' ? 'selected' : ''}>📞 تم التأكيد</option>
+                <option value="Shipped" ${status === 'Shipped' ? 'selected' : ''}>🚚 قيد الشحن</option>
+                <option value="Delivered" ${status === 'Delivered' ? 'selected' : ''}>✅ تم التسليم</option>
+                <option value="Cancelled" ${status === 'Cancelled' ? 'selected' : ''}>❌ ملغي</option>
+              </select>
+            </td>
+
+            <!-- Actions -->
+            <td class="px-4 py-3.5 text-center">
+              <div class="inline-flex items-center gap-1">
+                <!-- Direct WhatsApp Confirmation -->
+                <a 
+                  href="https://wa.me/${cleanPhone.replace('+', '')}?text=${waMsg}" 
+                  target="_blank"
+                  class="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-600 hover:text-white flex items-center justify-center text-xs transition" 
+                  title="مراسلة عبر واتساب للتأكيد"
+                >
+                  <i class="fa-brands fa-whatsapp text-sm"></i>
+                </a>
+                
+                <!-- Direct Phone Call -->
+                <a 
+                  href="tel:${cleanPhone}" 
+                  class="w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white flex items-center justify-center text-xs transition" 
+                  title="اتصال هاتفي مباشر"
+                >
+                  <i class="fa-solid fa-phone text-xs"></i>
+                </a>
+
+                <!-- Delete Order -->
+                <button 
+                  onclick="deleteOrder('${orderId}')" 
+                  class="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white flex items-center justify-center text-xs transition" 
+                  title="حذف هذا الطلب"
+                >
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
+            </td>
+
+          </tr>
+        `;
+
+        // --- 2. MOBILE CARD (Phone & Tablet) ---
+        cardsHtml += `
+          <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+            
+            <!-- Card Header: Ref, Time, Status -->
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="font-mono font-black text-blue-600 text-xs bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">${o.orderRef || '#CMD-N/A'}</span>
+                <span class="text-[11px] text-slate-400 font-medium">${timeAgo}</span>
+              </div>
+              <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${statusBadgeClass}">
+                ${getStatusArabic(status)}
+              </span>
+            </div>
+
+            <!-- Customer Details -->
+            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+              <div class="font-bold text-slate-900 text-sm flex items-center justify-between">
+                <span>${o.customerName || 'بدون اسم'}</span>
+                <span class="font-black text-emerald-600 text-sm">${o.price || 0} ${o.symbol || 'ر.س'}</span>
+              </div>
+              <div class="text-xs text-slate-600 flex items-center gap-1.5 pt-0.5">
+                <i class="fa-solid fa-location-dot text-slate-400 text-[11px]"></i>
+                <span>${o.city || '-'}</span>
+                ${o.address ? `<span class="text-slate-400 text-[11px]">(${o.address})</span>` : ''}
+              </div>
+              <div class="text-xs text-slate-600 flex items-center gap-1.5 pt-0.5">
+                <i class="fa-solid fa-box text-slate-400 text-[11px]"></i>
+                <span class="w-2.5 h-2.5 rounded-full ${color.dot} inline-block flex-shrink-0"></span>
+                <span class="font-bold">${color.name}</span>
+                <span class="text-slate-400">(${o.quantity || 1}x حبة)</span>
+              </div>
+            </div>
+
+            <!-- Mobile Action Bar -->
+            <div class="flex items-center justify-between gap-2 pt-1">
+              
+              <!-- Quick Status Selector -->
+              <select 
+                onchange="updateOrderStatus('${orderId}', this.value)" 
+                class="flex-1 text-xs font-bold px-2.5 py-2 rounded-xl border bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="Pending" ${status === 'Pending' ? 'selected' : ''}>⏳ قيد الانتظار</option>
+                <option value="Confirmed" ${status === 'Confirmed' ? 'selected' : ''}>📞 تم التأكيد</option>
+                <option value="Shipped" ${status === 'Shipped' ? 'selected' : ''}>🚚 قيد الشحن</option>
+                <option value="Delivered" ${status === 'Delivered' ? 'selected' : ''}>✅ تم التسليم</option>
+                <option value="Cancelled" ${status === 'Cancelled' ? 'selected' : ''}>❌ ملغي</option>
+              </select>
+
+              <!-- Phone Call Button -->
+              <a 
+                href="tel:${cleanPhone}" 
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 transition active:scale-95 shadow-sm"
+              >
+                <i class="fa-solid fa-phone"></i>
+                <span>اتصال</span>
+              </a>
+
+              <!-- WhatsApp Button -->
+              <a 
+                href="https://wa.me/${cleanPhone.replace('+', '')}?text=${waMsg}" 
+                target="_blank"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 transition active:scale-95 shadow-sm"
+              >
+                <i class="fa-brands fa-whatsapp text-sm"></i>
+                <span>واتساب</span>
+              </a>
+
+              <!-- Delete Button -->
+              <button 
+                onclick="deleteOrder('${orderId}')" 
+                class="bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white p-2 rounded-xl text-xs transition"
+                title="حذف الطلب"
+              >
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+
+            </div>
+
+          </div>
+        `;
+      });
+
+      tableBody.innerHTML = tableHtml;
+      cardsContainer.innerHTML = cardsHtml;
+    }
+
+    // Update Status in Firestore & LocalStorage
+    async function updateOrderStatus(orderId, newStatus) {
+      // 1. Update in Firestore
+      if (db) {
+        try {
+          await db.collection("orders").doc(orderId).update({
+            status: newStatus,
+            updatedAt: new Date().toISOString()
+          });
+          showToast(`تم تحديث حالة الطلب إلى: ${getStatusArabic(newStatus)}`);
+        } catch (err) {
+          // If doc id wasn't Firestore doc ID, search by orderRef
+          try {
+            const snap = await db.collection("orders").where("orderRef", "==", orderId).get();
+            snap.forEach(doc => {
+              doc.ref.update({ status: newStatus, updatedAt: new Date().toISOString() });
+            });
+            showToast(`تم تحديث حالة الطلب إلى: ${getStatusArabic(newStatus)}`);
+          } catch (e) {
+            console.warn("Firestore status update fallback:", e);
+          }
+        }
+      }
+
+      // 2. Always update local copy
+      try {
+        const local = JSON.parse(localStorage.getItem('microkids_orders') || '[]');
+        const idx = local.findIndex(o => o._id === orderId || o.orderRef === orderId);
+        if (idx !== -1) {
+          local[idx].status = newStatus;
+          localStorage.setItem('microkids_orders', JSON.stringify(local));
+        }
+      } catch (err) {}
+
+      // Update raw memory state immediately
+      const memOrder = rawOrders.find(o => o._id === orderId || o.orderRef === orderId);
+      if (memOrder) {
+        memOrder.status = newStatus;
+        applyFilters();
+      }
+    }
+
+    // Delete Order
+    async function deleteOrder(orderId) {
+      if (!confirm("هل أنت متأكد من رغبتك في حذف هذا الطلب نهائياً؟")) return;
+
+      // 1. Delete from Firestore
+      if (db) {
+        try {
+          await db.collection("orders").doc(orderId).delete();
+          showToast("تم حذف الطلب بنجاح من قاعدة البيانات");
+        } catch (err) {
+          try {
+            const snap = await db.collection("orders").where("orderRef", "==", orderId).get();
+            snap.forEach(doc => doc.ref.delete());
+            showToast("تم حذف الطلب بنجاح");
+          } catch (e) {
+            console.warn("Delete order error:", e);
+          }
+        }
+      }
+
+      // 2. Delete from LocalStorage
+      try {
+        let local = JSON.parse(localStorage.getItem('microkids_orders') || '[]');
+        local = local.filter(o => o._id !== orderId && o.orderRef !== orderId);
+        localStorage.setItem('microkids_orders', JSON.stringify(local));
+      } catch (e) {}
+
+      rawOrders = rawOrders.filter(o => o._id !== orderId && o.orderRef !== orderId);
+      applyFilters();
+    }
+
+    // Manual Order Modal Functions
+    function openManualOrderModal() {
+      document.getElementById('manualOrderModal').classList.remove('hidden');
+    }
+
+    function closeManualOrderModal() {
+      document.getElementById('manualOrderModal').classList.add('hidden');
+      document.getElementById('manualOrderForm').reset();
+    }
+
+    function updateManualPrice() {
+      const q = document.getElementById('mQuantity').value;
+      const priceMap = { "1": 119, "2": 199, "3": 269 };
+      document.getElementById('mPrice').value = priceMap[q] || 199;
+    }
+
+    async function submitManualOrder(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmitManual');
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري الحفظ...`;
+
+      const colorKey = document.getElementById('mColor').value;
+      const colorInfo = COLOR_INFO[colorKey];
+      const qty = parseInt(document.getElementById('mQuantity').value);
+      const price = parseFloat(document.getElementById('mPrice').value);
+      const orderRef = "#MAN-" + Math.floor(10000 + Math.random() * 90000);
+
+      const orderData = {
+        orderRef: orderRef,
+        customerName: document.getElementById('mCustName').value.trim(),
+        phone: document.getElementById('mCustPhone').value.trim(),
+        country: document.getElementById('mCustCountry').value,
+        city: document.getElementById('mCustCity').value.trim(),
+        address: document.getElementById('mCustAddress').value.trim(),
+        colorKey: colorKey,
+        colorName: colorInfo.name,
+        quantity: qty,
+        packageTitle: `${qty}x ميكروسكوب`,
+        price: price,
+        currency: "SAR",
+        symbol: "ر.س",
+        status: document.getElementById('mStatus').value,
+        createdAt: new Date().toISOString(),
+        timestamp: Date.now(),
+        isManual: true
+      };
+
+      // Save to Firestore
+      if (db) {
+        try {
+          await db.collection("orders").add(orderData);
+        } catch (err) {
+          console.warn("Manual order firestore save notice:", err);
+        }
+      }
+
+      // Always save to localStorage
+      try {
+        const local = JSON.parse(localStorage.getItem('microkids_orders') || '[]');
+        local.unshift(orderData);
+        localStorage.setItem('microkids_orders', JSON.stringify(local));
+      } catch (err) {}
+
+      rawOrders.unshift(orderData);
+      applyFilters();
+
+      btn.disabled = false;
+      btn.innerHTML = `حفظ الطلب`;
+      closeManualOrderModal();
+      showToast("تمت إضافة الطلب اليدوي بنجاح!");
+    }
+
+    // Export Orders to UTF-8 CSV with BOM for Excel
+    function exportToCSV() {
+      if (rawOrders.length === 0) {
+        alert("لا توجد طلبات لتصديرها حالياً!");
+        return;
+      }
+
+      const headers = [
+        "رقم الطلب",
+        "تاريخ الطلب",
+        "اسم العميل",
+        "الهاتف",
+        "الدولة",
+        "المدينة",
+        "العنوان",
+        "اللون",
+        "الكمية",
+        "السعر الإجمالي",
+        "العملة",
+        "حالة الطلب"
+      ];
+
+      const rows = rawOrders.map(o => {
+        const color = COLOR_INFO[o.colorKey] || { name: o.colorName || "أصفر" };
+        const dateStr = o.createdAt ? new Date(o.createdAt).toLocaleString('ar-MA') : '';
+        return [
+          `"${(o.orderRef || '').replace(/"/g, '""')}"`,
+          `"${dateStr}"`,
+          `"${(o.customerName || '').replace(/"/g, '""')}"`,
+          `"\t${(o.phone || '').replace(/"/g, '""')}"`,
+          `"${(o.country || '').replace(/"/g, '""')}"`,
+          `"${(o.city || '').replace(/"/g, '""')}"`,
+          `"${(o.address || '').replace(/"/g, '""')}"`,
+          `"${color.name}"`,
+          o.quantity || 1,
+          o.price || 0,
+          `"${o.currency || 'SAR'}"`,
+          `"${getStatusArabic(o.status || 'Pending')}"`
+        ].join(",");
+      });
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `MicroKids_Orders_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("تم تنزيل ملف الطلبات بنجاح!");
+    }
+
+    // Reload Trigger
+    function reloadOrders() {
+      const icon = document.getElementById('refreshIcon');
+      icon.classList.add('fa-spin');
+      setTimeout(() => {
+        icon.classList.remove('fa-spin');
+        initOrdersListener();
+        showToast("تم تحديث البيانات بنجاح");
+      }, 700);
+    }
+
+    // ==========================================
+    // 🔐 AUTHENTICATION LOGIC (Password: 123456789)
+    // ==========================================
+    const ADMIN_PASSWORD = "123456789";
+    let ordersListenerStarted = false;
+
+    function checkAuth() {
+      const sessionAuth = sessionStorage.getItem('admin_authenticated');
+      const localAuth = localStorage.getItem('admin_authenticated');
+      if (sessionAuth === 'true' || localAuth === 'true') {
+        showAdmin();
+      } else {
+        showLogin();
+      }
+    }
+
+    function showLogin() {
+      document.getElementById('authScreen').classList.remove('hidden');
+      document.getElementById('adminApp').classList.add('hidden');
+      setTimeout(() => {
+        const inp = document.getElementById('adminPassInput');
+        if (inp) inp.focus();
+      }, 150);
+    }
+
+    function showAdmin() {
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('adminApp').classList.remove('hidden');
+      if (!ordersListenerStarted) {
+        initOrdersListener();
+        ordersListenerStarted = true;
+      }
+    }
+
+    function handleLogin(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById('adminPassInput');
+      const err = document.getElementById('loginError');
+      const remember = document.getElementById('rememberMe').checked;
+      const entered = (input.value || '').trim();
+
+      if (entered === ADMIN_PASSWORD) {
+        err.classList.add('hidden');
+        sessionStorage.setItem('admin_authenticated', 'true');
+        if (remember) {
+          localStorage.setItem('admin_authenticated', 'true');
+        }
+        showAdmin();
+        showToast("مرحباً بك! تم تسجيل الدخول بنجاح 🎉");
+      } else {
+        err.classList.remove('hidden');
+        input.classList.add('ring-2', 'ring-rose-500');
+        input.focus();
+        input.select();
+      }
+    }
+
+    function logoutAdmin() {
+      sessionStorage.removeItem('admin_authenticated');
+      localStorage.removeItem('admin_authenticated');
+      const input = document.getElementById('adminPassInput');
+      if (input) input.value = '';
+      const err = document.getElementById('loginError');
+      if (err) err.classList.add('hidden');
+      showLogin();
+      showToast("تم قفل لوحة التحكم بنجاح 🔒");
+    }
+
+    function togglePasswordVisibility() {
+      const input = document.getElementById('adminPassInput');
+      const icon = document.getElementById('eyeIcon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    }
+
+    // Start on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      checkAuth();
+    });
+  </script>
+</body>
+</html>
