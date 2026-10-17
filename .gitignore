@@ -25,9 +25,9 @@ npm-debug.log*
 .env.local
 .env.*.local
 
-# Node (if added later)
+# Node dependencies
 node_modules/
-dist/
+package-lock.json
 
 # Build artifacts
 *.tmp
