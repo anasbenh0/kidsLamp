@@ -1,0 +1,34 @@
+# ========================
+# MicroKids™ Landing Page
+# .gitignore
+# ========================
+
+# Thumbnails & OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor & IDE folders
+.vscode/
+.idea/
+*.suo
+*.user
+*.swp
+*.swo
+
+# Sensitive / local env files
+.env
+.env.local
+.env.*.local
+
+# Node (if added later)
+node_modules/
+dist/
+
+# Build artifacts
+*.tmp
+*.bak
